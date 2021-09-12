@@ -67,6 +67,12 @@ spark-sql> show version;
 ![spark sql](https://user-images.githubusercontent.com/23160530/132961945-3a235a5c-4188-4e7d-b338-478e9dfbada2.png)
 
 ### 作业二
+#### 准备工作
+```
+set spark.sql.planChangeLog.level=WARN;
+create table student (name string, age int, sex boolean);
+insert into student values ("wang", 15, true), ("li", 20, false), ("zhang", 18, true);
+```
 #### 1. apply下面三条优化规则： CombineFilters CollapseProject BooleanSimplification
 ```
 select name from (select name, age, sex from student where age>15 and sex=0) t where t.age>12;
@@ -204,3 +210,50 @@ except
 ![FoldablePro](https://user-images.githubusercontent.com/23160530/132961923-0f76bc25-8382-4318-a691-f967fad5d202.png)
 
 ### 作业三
+#### 第一步实现自定义规则
+```
+package me.qinben
+
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.expressions.{Literal, Log, Multiply}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.types.{Decimal, IntegerType}
+
+case class CustomRule(spark: SparkSession) extends Rule[LogicalPlan] with Logging {
+    def apply(plan: LogicalPlan): LogicalPlan = plan transformExpressions  {
+        case Multiply(left,right,error) if right.isInstanceOf[Literal] &&
+                right.asInstanceOf[Literal].value.asInstanceOf[Decimal].toDouble == 1.0 =>
+            println("=== Apply CustomOptimizerRule Success ===")
+            left
+    }
+}
+```
+#### 第二步创建自定义extension，并注入
+```
+package me.qinben
+
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.SparkSessionExtensions
+
+class CustomSparkExtension extends (SparkSessionExtensions => Unit) with Logging {
+    override def apply(v1: SparkSessionExtensions): Unit = {
+        logInfo("Loading MyExtension extension")
+        v1.injectOptimizerRule(session =>
+            new CustomRule(session)
+        )
+    }
+}
+```
+#### 编译打包并测试
+1. 使用idea编译打包，并拷贝到spark根目录，方便调用
+2. 运行
+```
+bin/spark-sql --jars custom_extension-1.0-SNAPSHOT.jar --conf spark.sql.extensions=me.qinben.CustomSparkExtension
+spark-sql> set spark.sql.planChangeLog.level=WARN;
+spark-sql> select age * 1.0 from student;
+```
+3. 运行截图
+
+![作业三](https://user-images.githubusercontent.com/23160530/132987198-1460d7a5-f3f7-45de-bea5-ed362948f89e.png)
