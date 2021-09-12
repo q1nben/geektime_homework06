@@ -1,0 +1,11 @@
+<component name="ArtifactManager">
+  <artifact name="custompushdown:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/custompushdown_jar</output-path>
+    <root id="root">
+      <element id="archive" name="custompushdown.jar">
+        <element id="module-output" name="customrule" />
+      </element>
+      <element id="library" level="application" name="scala-sdk-2.12.10" />
+    </root>
+  </artifact>
+</component>
